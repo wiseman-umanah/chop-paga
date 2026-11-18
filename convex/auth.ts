@@ -116,8 +116,19 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
      * the existing user instead of creating a duplicate.
      */
     async createOrUpdateUser(ctx, args) {
-      // If the password account already exists, return its user as-is
-      if (args.existingUserId !== null) return args.existingUserId;
+      // Google has already verified the email, so OAuth users skip our OTP step
+      const isOAuth = args.type === "oauth";
+
+      // If the account already exists, return its user as-is
+      if (args.existingUserId !== null) {
+        if (isOAuth) {
+          const user = await ctx.db.get(args.existingUserId);
+          if (user && !user.emailVerificationTime) {
+            await ctx.db.patch(args.existingUserId, { emailVerificationTime: Date.now() });
+          }
+        }
+        return args.existingUserId;
+      }
 
       // For credentials (password) sign-ups only — check for an existing user
       // with the same email (e.g. signed up via Google OAuth)
@@ -136,6 +147,11 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         firstName: (args.profile.firstName as string | undefined) ?? "",
         lastName: (args.profile.lastName as string | undefined) ?? "",
         phone: (args.profile.phone as string | undefined) ?? "",
+        ...(isOAuth && {
+          name: args.profile.name as string | undefined,
+          image: args.profile.image as string | undefined,
+          emailVerificationTime: Date.now(),
+        }),
       });
     },
   },

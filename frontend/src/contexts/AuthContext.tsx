@@ -51,8 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isGoogleUser = !!(profile?.image && String(profile.image).startsWith('http'))
   const emailVerified = isGoogleUser || !!(verificationStatus?.verified)
 
+  // Still loading until the verification status arrives — otherwise route guards
+  // see emailVerified=false for a moment and bounce verified users to /verify-email
+  const loading = isLoading || (isAuthenticated && verificationStatus === undefined)
+
   return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, emailVerified, user, logout: signOut }}>
+    <AuthContext.Provider value={{ isAuthenticated, isLoading: loading, emailVerified, user, logout: signOut }}>
       {children}
     </AuthContext.Provider>
   )
