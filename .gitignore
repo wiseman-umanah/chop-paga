@@ -1,0 +1,11 @@
+.bob
+.env
+AGENTS.md
+prd.md
+CHOP - Product Requirement Document*
+chop-back*
+node_modules
+.convex
+.env.local
+
+*.tsbuildinfo
