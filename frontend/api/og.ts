@@ -1,6 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { readFileSync } from 'fs'
-import { join } from 'path'
 
 /** Convex dev URL — falls back to prod if env not set */
 const CONVEX_URL =
@@ -40,16 +38,19 @@ async function fetchSession(slug: string) {
   const json = await res.json() as { status: string; value?: unknown }
   if (json.status !== 'success') return null
   return json.value as {
-    title: string
+    name: string
     mode: string
-    totalKobo: number
+    totalAmount: number
     participants: { name: string }[]
   } | null
 }
 
-function readIndex(): string {
-  const indexPath = join(process.cwd(), 'dist', 'index.html')
-  return readFileSync(indexPath, 'utf-8')
+/** The built SPA shell — fetched from this deployment's own static files */
+async function readIndex(req: VercelRequest): Promise<string> {
+  const proto = (req.headers['x-forwarded-proto'] as string | undefined) ?? 'https'
+  const res = await fetch(`${proto}://${req.headers.host}/index.html`)
+  if (!res.ok) throw new Error(`index.html: HTTP ${res.status}`)
+  return res.text()
 }
 
 /** Strip any existing og/twitter/title/description meta from the SPA index.html */
@@ -67,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const ua = req.headers['user-agent'] ?? ''
   if (!CRAWLER_RE.test(ua)) {
     try {
-      const html = readIndex()
+      const html = await readIndex(req)
       res.setHeader('Content-Type', 'text/html; charset=utf-8')
       return res.status(200).send(html)
     } catch {
@@ -94,8 +95,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (session) {
         const modeLabel        = MODE_LABEL[session.mode] ?? 'Chop'
         const participantCount = session.participants?.length ?? 0
-        const amount           = formatNaira(session.totalKobo ?? 0)
-        title       = `Pay your share — ${session.title}`
+        const amount           = formatNaira(session.totalAmount ?? 0)
+        title       = `Pay your share — ${session.name}`
         description = `${modeLabel} · ${amount} split across ${participantCount} ${participantCount === 1 ? 'person' : 'people'}. Open the link to pay your share on Chop — no app download needed.`
       }
     } catch {
@@ -124,7 +125,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   `
 
   try {
-    let html = readIndex()
+    let html = await readIndex(req)
     html = stripExistingMeta(html)
     html = html.replace('</head>', `${ogMeta}\n</head>`)
     res.setHeader('Content-Type', 'text/html; charset=utf-8')
